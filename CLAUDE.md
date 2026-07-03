@@ -67,4 +67,5 @@ never re-encoded.
   functions and fixtures.
 - CI (`.github/workflows/ci.yml`) also runs pip-audit (dependency CVEs), zizmor +
   actionlint (workflow audits), and gitleaks (secrets); `codeql.yml` runs CodeQL SAST.
-  Actions are pinned to commit SHAs — Dependabot keeps them and uv.lock updated.
+  Actions are pinned to version tags (`.github/zizmor.yml` relaxes zizmor's hash-pin
+  policy to ref-pin) — Dependabot keeps them and uv.lock updated.
