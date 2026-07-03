@@ -1,0 +1,54 @@
+[project]
+name = "claude-pdf-transformer"
+version = "0.1.0"
+description = "Transform a directory of PDFs to comply with Anthropic's multimodal PDF limits (size and page count) by splitting and compressing."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "John F. Mercer" }]
+requires-python = ">=3.13"
+dependencies = [
+    "pypdf>=5.1",
+    "typer>=0.15",
+]
+
+[project.urls]
+Repository = "https://github.com/jfmercer/claude-pdf-transformer"
+
+[project.scripts]
+pdf-transformer = "pdf_transformer.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "reportlab>=4.2",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.7,<1"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pdf_transformer"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "PTH", # flake8-use-pathlib
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
