@@ -123,31 +123,19 @@ def _process_pdf(
         return result
 
     if dry_run:
-        actions = []
-        if needs_split:
-            parts = len(splitter.ranges_for_page_limit(info.pages, max_pages))
-            actions.append(f"would split {info.pages} pages into {parts} parts")
-        if needs_size_work:
-            actions.append(
-                f"would compress ({info.size_bytes / _MB:.1f} MB); may split further "
-                "if compression alone is not enough"
-            )
-        logger.info("[dry-run] %s: %s", info.path.name, "; ".join(actions))
-        result.was_split = needs_split
-        result.was_compressed = needs_size_work
+        _report_dry_run(
+            info,
+            result,
+            needs_split=needs_split,
+            needs_size_work=needs_size_work,
+            max_pages=max_pages,
+        )
         return result
 
     with tempfile.TemporaryDirectory(prefix="pdf-transformer-") as tmp:
         workdir = Path(tmp)
         if needs_split:
-            ranges = splitter.ranges_for_page_limit(info.pages, max_pages)
-            pieces = []
-            for i, (start, end) in enumerate(ranges):
-                piece = workdir / f"pagesplit_{i:04d}.pdf"
-                splitter.write_page_range(info.path, piece, start, end)
-                pieces.append(piece)
-            result.was_split = True
-            logger.info("%s: split %d pages into %d parts", info.path.name, info.pages, len(pieces))
+            pieces = _split_by_pages(info, workdir, max_pages=max_pages, result=result)
         else:
             pieces = [info.path]
 
@@ -170,22 +158,62 @@ def _process_pdf(
 
         if len(final_pieces) > len(pieces):
             result.was_split = True
-
-        if len(final_pieces) == 1:
-            dests = [output_dir / info.path.name]
-        else:
-            dests = [
-                output_dir / f"{info.path.stem}_part{i}.pdf"
-                for i in range(1, len(final_pieces) + 1)
-            ]
-        for src, dest in zip(final_pieces, dests, strict=True):
-            if src == info.path:
-                shutil.copy2(src, dest)
-            else:
-                shutil.move(src, dest)
-        result.outputs = dests
-        logger.info("%s -> %s", info.path.name, ", ".join(d.name for d in dests))
+        _write_outputs(final_pieces, info, output_dir, result)
     return result
+
+
+def _report_dry_run(
+    info: PdfInfo,
+    result: FileResult,
+    *,
+    needs_split: bool,
+    needs_size_work: bool,
+    max_pages: int,
+) -> None:
+    actions = []
+    if needs_split:
+        parts = len(splitter.ranges_for_page_limit(info.pages, max_pages))
+        actions.append(f"would split {info.pages} pages into {parts} parts")
+    if needs_size_work:
+        actions.append(
+            f"would compress ({info.size_bytes / _MB:.1f} MB); may split further "
+            "if compression alone is not enough"
+        )
+    logger.info("[dry-run] %s: %s", info.path.name, "; ".join(actions))
+    result.was_split = needs_split
+    result.was_compressed = needs_size_work
+
+
+def _split_by_pages(
+    info: PdfInfo, workdir: Path, *, max_pages: int, result: FileResult
+) -> list[Path]:
+    ranges = splitter.ranges_for_page_limit(info.pages, max_pages)
+    pieces = []
+    for i, (start, end) in enumerate(ranges):
+        piece = workdir / f"pagesplit_{i:04d}.pdf"
+        splitter.write_page_range(info.path, piece, start, end)
+        pieces.append(piece)
+    result.was_split = True
+    logger.info("%s: split %d pages into %d parts", info.path.name, info.pages, len(pieces))
+    return pieces
+
+
+def _write_outputs(
+    final_pieces: list[Path], info: PdfInfo, output_dir: Path, result: FileResult
+) -> None:
+    if len(final_pieces) == 1:
+        dests = [output_dir / info.path.name]
+    else:
+        dests = [
+            output_dir / f"{info.path.stem}_part{i}.pdf" for i in range(1, len(final_pieces) + 1)
+        ]
+    for src, dest in zip(final_pieces, dests, strict=True):
+        if src == info.path:
+            shutil.copy2(src, dest)
+        else:
+            shutil.move(src, dest)
+    result.outputs = dests
+    logger.info("%s -> %s", info.path.name, ", ".join(d.name for d in dests))
 
 
 def _fit_to_size(

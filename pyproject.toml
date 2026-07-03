@@ -20,7 +20,9 @@ pdf-transformer = "pdf_transformer.cli:app"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.14",
     "pytest>=8.3",
+    "pytest-cov>=6",
     "reportlab>=4.2",
     "ruff>=0.8",
 ]
@@ -38,15 +40,37 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "SIM", # flake8-simplify
-    "PTH", # flake8-use-pathlib
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "PTH",   # flake8-use-pathlib
+    "S",     # flake8-bandit (security)
+    "C90",   # mccabe cyclomatic complexity
+    "PLR09", # pylint refactor caps (too many args/branches/statements)
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6 # keyword-only threshold params (max_size_mb, max_pages, …) thread through
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"] # asserts are the point of tests
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+mypy_path = ["src"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "reportlab.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

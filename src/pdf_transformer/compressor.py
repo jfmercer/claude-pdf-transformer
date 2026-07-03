@@ -45,7 +45,8 @@ def compress_pdf(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
         str(src),
     ]
     logger.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # No shell; argv is a fixed template around a gs binary discovered via shutil.which.
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
     if result.returncode != 0:
         logger.warning("Ghostscript failed on %s (%s): %s", src.name, preset, result.stderr.strip())
         return False
