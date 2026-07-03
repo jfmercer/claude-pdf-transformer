@@ -4,17 +4,22 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Ghostscript
         run: sudo apt-get update && sudo apt-get install -y ghostscript
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
 
@@ -27,5 +32,41 @@ jobs:
       - name: Check formatting
         run: uv run ruff format --check
 
-      - name: Run tests
-        run: uv run pytest
+      - name: Type check
+        run: uv run mypy
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=pdf_transformer --cov-report=term-missing --cov-fail-under=95
+
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          uv export --no-emit-project --format requirements-txt > requirements.txt
+          uvx pip-audit -r requirements.txt --disable-pip
+
+      - name: Audit workflows
+        run: uvx zizmor .github/workflows/
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Lint workflow files
+        uses: raven-actions/actionlint@v2
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
