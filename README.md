@@ -1,5 +1,10 @@
 # claude-pdf-transformer
 
+[![CI](https://github.com/jfmercer/claude-pdf-transformer/actions/workflows/ci.yml/badge.svg)](https://github.com/jfmercer/claude-pdf-transformer/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/jfmercer/claude-pdf-transformer/actions/workflows/codeql.yml/badge.svg)](https://github.com/jfmercer/claude-pdf-transformer/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/jfmercer/claude-pdf-transformer/branch/master/graph/badge.svg)](https://codecov.io/gh/jfmercer/claude-pdf-transformer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Transform a directory of PDFs into copies that comply with [Anthropic's requirements for multimodal PDF processing](https://support.claude.com/en/articles/8241126):
 
 - **File size under 30 MB**
