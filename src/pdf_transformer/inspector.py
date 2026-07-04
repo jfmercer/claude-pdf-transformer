@@ -31,8 +31,8 @@ def inspect_pdf(path: Path) -> PdfInfo:
     Raises :class:`EncryptedPdfError` for password-protected files and
     :class:`CorruptPdfError` for files pypdf cannot parse.
     """
-    size_bytes = path.stat().st_size
     try:
+        size_bytes = path.stat().st_size
         reader = PdfReader(path)
         if reader.is_encrypted:
             raise EncryptedPdfError(f"{path.name} is encrypted/password-protected")
@@ -40,6 +40,8 @@ def inspect_pdf(path: Path) -> PdfInfo:
     except PdfInspectionError:
         raise
     except Exception as exc:
+        # Broad on purpose: pypdf's error types aren't stable across versions/inputs,
+        # and this also catches a file vanishing between listing and inspection.
         raise CorruptPdfError(f"{path.name} could not be parsed as a PDF: {exc}") from exc
     if pages == 0:
         raise CorruptPdfError(f"{path.name} contains no pages")

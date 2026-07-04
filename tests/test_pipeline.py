@@ -1,12 +1,14 @@
+import logging
 import shutil
 from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 from pdf_transformer import compressor, pipeline
 from tests.conftest import (
+    gs_required,
     make_blank_pdf,
     make_corrupt_pdf,
     make_encrypted_pdf,
@@ -16,8 +18,6 @@ from tests.conftest import (
 )
 
 MB = 1024 * 1024
-
-gs_required = pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
 
 
 @pytest.fixture
@@ -38,6 +38,52 @@ def compression_ineffective(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def fake(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
         shutil.copyfile(src, dest)
+        return True
+
+    monkeypatch.setattr(compressor, "compress_pdf", fake)
+    monkeypatch.setattr(compressor, "find_ghostscript", lambda: "gs")
+
+
+@pytest.fixture
+def compression_effective_screen_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend /ebook is insufficient but /screen shrinks the file enough."""
+
+    def fake(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
+        if preset == "/ebook":
+            shutil.copyfile(src, dest)
+        else:
+            make_blank_pdf(dest, pages=1)
+        return True
+
+    monkeypatch.setattr(compressor, "compress_pdf", fake)
+    monkeypatch.setattr(compressor, "find_ghostscript", lambda: "gs")
+
+
+@pytest.fixture
+def compression_first_preset_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend /ebook fails outright (as Ghostscript itself might) but /screen succeeds."""
+
+    def fake(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
+        if preset == "/ebook":
+            return False
+        make_blank_pdf(dest, pages=1)
+        return True
+
+    monkeypatch.setattr(compressor, "compress_pdf", fake)
+    monkeypatch.setattr(compressor, "find_ghostscript", lambda: "gs")
+
+
+@pytest.fixture
+def compression_partially_effective(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend Ghostscript shrinks the file (by dropping pages) but not below the limit."""
+
+    def fake(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
+        reader = PdfReader(src)
+        writer = PdfWriter()
+        for page in reader.pages[: len(reader.pages) // 2]:
+            writer.add_page(page)
+        with dest.open("wb") as fh:
+            writer.write(fh)
         return True
 
     monkeypatch.setattr(compressor, "compress_pdf", fake)
@@ -149,13 +195,74 @@ def test_dry_run_writes_nothing(input_dir: Path, output_dir: Path) -> None:
     assert not summary.failed
 
 
-def test_missing_ghostscript_raises_when_compression_needed(
+def test_missing_ghostscript_recorded_as_failure(
     input_dir: Path, output_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(compressor, "find_ghostscript", lambda: None)
     make_noisy_pdf(input_dir / "heavy.pdf", pages=3)
-    with pytest.raises(compressor.GhostscriptNotFoundError):
-        pipeline.process_directory(input_dir, output_dir, max_size_mb=0.05, max_pages=100)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=0.05, max_pages=100)
+    assert len(summary.failed) == 1
+    error = summary.failed[0].error
+    assert error is not None
+    assert "Ghostscript" in error
+
+
+def test_empty_input_directory_logs_warning(
+    input_dir: Path, output_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=30, max_pages=100)
+    assert summary.results == []
+    assert "No files found" in caplog.text
+
+
+def test_dry_run_reports_size_driven_compression(
+    input_dir: Path, output_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    make_noisy_pdf(input_dir / "heavy.pdf", pages=3)
+    with caplog.at_level(logging.INFO):
+        summary = pipeline.process_directory(
+            input_dir, output_dir, max_size_mb=0.05, max_pages=100, dry_run=True
+        )
+    assert not output_dir.exists()
+    result = summary.results[0]
+    assert result.was_compressed
+    assert "would compress" in caplog.text
+
+
+def test_preset_fallback_to_screen_when_ebook_insufficient(
+    input_dir: Path, output_dir: Path, compression_effective_screen_only: None
+) -> None:
+    make_noisy_pdf(input_dir / "heavy.pdf", pages=3)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=0.05, max_pages=100)
+    assert [p.name for p in output_dir.iterdir()] == ["heavy.pdf"]
+    result = summary.results[0]
+    assert result.was_compressed
+    assert not result.was_split
+    assert not summary.failed
+
+
+def test_preset_continues_after_ghostscript_failure(
+    input_dir: Path, output_dir: Path, compression_first_preset_fails: None
+) -> None:
+    make_noisy_pdf(input_dir / "heavy.pdf", pages=3)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=0.05, max_pages=100)
+    assert [p.name for p in output_dir.iterdir()] == ["heavy.pdf"]
+    result = summary.results[0]
+    assert result.was_compressed
+    assert not summary.failed
+
+
+def test_was_compressed_flag_set_when_compression_insufficient_then_split(
+    input_dir: Path, output_dir: Path, compression_partially_effective: None
+) -> None:
+    make_noisy_pdf(input_dir / "stubborn.pdf", pages=8)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=0.05, max_pages=100)
+    result = summary.results[0]
+    assert result.was_compressed
+    assert result.was_split
+    assert not summary.failed
+    assert len(list(output_dir.iterdir())) >= 2
 
 
 @gs_required

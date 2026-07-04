@@ -1,9 +1,10 @@
+import logging
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from pdf_transformer import compressor
+from pdf_transformer import cli, compressor
 from pdf_transformer.cli import app
 from tests.conftest import make_blank_pdf, make_corrupt_pdf
 
@@ -64,5 +65,31 @@ def test_missing_ghostscript_exits_2(
 
 def test_failed_pdf_exits_1(input_dir: Path, output_dir: Path) -> None:
     make_corrupt_pdf(input_dir / "broken.pdf")
+    result = runner.invoke(app, [str(input_dir), "--output-dir", str(output_dir)])
+    assert result.exit_code == 1
+
+
+def test_dry_run_with_missing_ghostscript_warns_but_continues(
+    input_dir: Path,
+    output_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(compressor, "find_ghostscript", lambda: None)
+    make_blank_pdf(input_dir / "ok.pdf", pages=3)
+    with caplog.at_level(logging.WARNING):
+        result = runner.invoke(app, [str(input_dir), "--output-dir", str(output_dir), "--dry-run"])
+    assert result.exit_code == 0
+    assert "ghostscript" in caplog.text.lower()
+
+
+def test_unexpected_pipeline_error_exits_1(
+    input_dir: Path, output_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "process_directory", boom)
+    make_blank_pdf(input_dir / "ok.pdf", pages=3)
     result = runner.invoke(app, [str(input_dir), "--output-dir", str(output_dir)])
     assert result.exit_code == 1

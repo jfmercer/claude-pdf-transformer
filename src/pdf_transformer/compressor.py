@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 PRESETS = ("/ebook", "/screen")
 """Ghostscript quality presets tried in order, most conservative first."""
 
+_TIMEOUT_SECONDS = 300
+
 GS_INSTALL_HINT = (
     "Ghostscript ('gs') was not found on PATH. Install it first:\n"
     "  macOS:          brew install ghostscript\n"
@@ -45,8 +47,16 @@ def compress_pdf(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
         str(src),
     ]
     logger.debug("Running: %s", " ".join(cmd))
-    # No shell; argv is a fixed template around a gs binary discovered via shutil.which.
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    try:
+        # No shell; argv is a fixed template around a gs binary discovered via shutil.which.
+        result = subprocess.run(  # noqa: S603
+            cmd, capture_output=True, text=True, check=False, timeout=_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "Ghostscript timed out on %s (%s) after %ds", src.name, preset, _TIMEOUT_SECONDS
+        )
+        return False
     if result.returncode != 0:
         logger.warning("Ghostscript failed on %s (%s): %s", src.name, preset, result.stderr.strip())
         return False

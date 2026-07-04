@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 _MB = 1024 * 1024
 
 
+def _mb(size_bytes: int) -> float:
+    return size_bytes / _MB
+
+
 class PieceTooLargeError(Exception):
     """A single page exceeds the size limit and cannot be reduced further."""
 
@@ -134,13 +138,13 @@ def _process_pdf(
 
     with tempfile.TemporaryDirectory(prefix="pdf-transformer-") as tmp:
         workdir = Path(tmp)
-        if needs_split:
-            pieces = _split_by_pages(info, workdir, max_pages=max_pages, result=result)
-        else:
-            pieces = [info.path]
-
         final_pieces: list[Path] = []
         try:
+            if needs_split:
+                pieces = _split_by_pages(info, workdir, max_pages=max_pages, result=result)
+            else:
+                pieces = [info.path]
+
             for piece in pieces:
                 final_pieces.extend(
                     _fit_to_size(
@@ -151,14 +155,14 @@ def _process_pdf(
                         result=result,
                     )
                 )
-        except PieceTooLargeError as exc:
+            if len(final_pieces) > len(pieces):
+                result.was_split = True
+            _write_outputs(final_pieces, info, output_dir, result)
+        except Exception as exc:
+            # Broad on purpose: pypdf/Ghostscript don't expose a fixed exception
+            # surface here, and one bad file must never abort the whole batch.
             result.error = str(exc)
             logger.error("%s: %s — no output written for this file", info.path.name, exc)
-            return result
-
-        if len(final_pieces) > len(pieces):
-            result.was_split = True
-        _write_outputs(final_pieces, info, output_dir, result)
     return result
 
 
@@ -176,7 +180,7 @@ def _report_dry_run(
         actions.append(f"would split {info.pages} pages into {parts} parts")
     if needs_size_work:
         actions.append(
-            f"would compress ({info.size_bytes / _MB:.1f} MB); may split further "
+            f"would compress ({_mb(info.size_bytes):.1f} MB); may split further "
             "if compression alone is not enough"
         )
     logger.info("[dry-run] %s: %s", info.path.name, "; ".join(actions))
@@ -208,10 +212,7 @@ def _write_outputs(
             output_dir / f"{info.path.stem}_part{i}.pdf" for i in range(1, len(final_pieces) + 1)
         ]
     for src, dest in zip(final_pieces, dests, strict=True):
-        if src == info.path:
-            shutil.copy2(src, dest)
-        else:
-            shutil.move(src, dest)
+        shutil.move(src, dest)
     result.outputs = dests
     logger.info("%s -> %s", info.path.name, ", ".join(d.name for d in dests))
 
@@ -225,26 +226,28 @@ def _fit_to_size(
     result: FileResult,
 ) -> list[Path]:
     """Return compliant piece(s) for ``piece``: compress first, split as a last resort."""
-    if piece.stat().st_size < max_bytes:
+    piece_size = piece.stat().st_size
+    if piece_size < max_bytes:
         return [piece]
     if gs_path is None:
         raise compressor.GhostscriptNotFoundError()
 
-    best = piece
+    best, best_size = piece, piece_size
     for preset in compressor.PRESETS:
         candidate = workdir / f"{piece.stem}_{preset.strip('/')}.pdf"
         if not compressor.compress_pdf(piece, candidate, preset, gs_path):
             continue
-        logger.debug("%s: %s -> %.2f MB", piece.name, preset, candidate.stat().st_size / _MB)
-        if candidate.stat().st_size < best.stat().st_size:
-            best = candidate
-        if best.stat().st_size < max_bytes:
+        candidate_size = candidate.stat().st_size
+        logger.debug("%s: %s -> %.2f MB", piece.name, preset, _mb(candidate_size))
+        if candidate_size < best_size:
+            best, best_size = candidate, candidate_size
+        if best_size < max_bytes:
             result.was_compressed = True
             logger.info(
                 "%s: compressed %.1f MB -> %.1f MB (%s)",
                 piece.name,
-                piece.stat().st_size / _MB,
-                best.stat().st_size / _MB,
+                _mb(piece_size),
+                _mb(best_size),
                 preset,
             )
             return [best]
@@ -254,20 +257,21 @@ def _fit_to_size(
     logger.info(
         "%s: still %.1f MB after compression, splitting by size",
         piece.name,
-        best.stat().st_size / _MB,
+        _mb(best_size),
     )
     return _split_until_fits(best, workdir=workdir, max_bytes=max_bytes)
 
 
 def _split_until_fits(piece: Path, *, workdir: Path, max_bytes: int) -> list[Path]:
     """Recursively halve ``piece`` until every part is under ``max_bytes``."""
-    if piece.stat().st_size < max_bytes:
+    piece_size = piece.stat().st_size
+    if piece_size < max_bytes:
         return [piece]
     pages = len(PdfReader(piece).pages)
     if pages <= 1:
         raise PieceTooLargeError(
-            f"a single page is {piece.stat().st_size / _MB:.1f} MB, over the "
-            f"{max_bytes / _MB:.1f} MB limit even after compression"
+            f"a single page is {_mb(piece_size):.1f} MB, over the "
+            f"{_mb(max_bytes):.1f} MB limit even after compression"
         )
     out: list[Path] = []
     for i, (start, end) in enumerate(splitter.balanced_ranges(pages, 2)):

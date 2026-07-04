@@ -1,6 +1,7 @@
 """Programmatically generated PDF fixtures — no binary files are committed."""
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,8 @@ from pypdf import PdfWriter
 
 BASE_WIDTH = 500.0
 PAGE_HEIGHT = 700.0
+
+gs_required = pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
 
 
 def make_blank_pdf(path: Path, pages: int) -> Path:

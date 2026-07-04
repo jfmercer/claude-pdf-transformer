@@ -72,12 +72,16 @@ def main(
             logger.error("%s", compressor.GS_INSTALL_HINT)
             raise typer.Exit(code=2)
 
-    summary = process_directory(
-        input_dir,
-        output_dir,
-        max_size_mb=max_size_mb,
-        max_pages=max_pages,
-        dry_run=dry_run,
-    )
+    try:
+        summary = process_directory(
+            input_dir,
+            output_dir,
+            max_size_mb=max_size_mb,
+            max_pages=max_pages,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        logger.error("Unexpected error: %s", exc)
+        raise typer.Exit(code=1) from exc
     if summary.failed:
         raise typer.Exit(code=1)
