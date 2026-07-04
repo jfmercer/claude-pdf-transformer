@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from importlib.metadata import version as _package_version
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +14,12 @@ from pdf_transformer.pipeline import process_directory
 app = typer.Typer(add_completion=False)
 
 logger = logging.getLogger(__name__)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(_package_version("claude-pdf-transformer"))
+        raise typer.Exit()
 
 
 @app.command()
@@ -46,6 +53,15 @@ def main(
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Enable detailed (debug) logging."),
+    ] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
     ] = False,
 ) -> None:
     """Make every PDF in INPUT_DIR comply with Anthropic's multimodal PDF limits.

@@ -5,6 +5,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Final
 
 from pypdf import PdfReader
 
@@ -13,7 +14,7 @@ from pdf_transformer.inspector import PdfInfo, PdfInspectionError, inspect_pdf
 
 logger = logging.getLogger(__name__)
 
-_MB = 1024 * 1024
+_MB: Final = 1024 * 1024
 
 
 def _mb(size_bytes: int) -> float:
@@ -212,7 +213,12 @@ def _write_outputs(
             output_dir / f"{info.path.stem}_part{i}.pdf" for i in range(1, len(final_pieces) + 1)
         ]
     for src, dest in zip(final_pieces, dests, strict=True):
-        shutil.move(src, dest)
+        if src == info.path:
+            # The original may pass through untouched (e.g. it shrank on disk
+            # between inspection and processing); never move it out of input_dir.
+            shutil.copy2(src, dest)
+        else:
+            shutil.move(src, dest)
     result.outputs = dests
     logger.info("%s -> %s", info.path.name, ", ".join(d.name for d in dests))
 

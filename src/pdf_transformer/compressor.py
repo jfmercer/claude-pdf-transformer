@@ -4,15 +4,16 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Final
 
 logger = logging.getLogger(__name__)
 
-PRESETS = ("/ebook", "/screen")
+PRESETS: Final = ("/ebook", "/screen")
 """Ghostscript quality presets tried in order, most conservative first."""
 
-_TIMEOUT_SECONDS = 300
+_TIMEOUT_SECONDS: Final[float] = 300
 
-GS_INSTALL_HINT = (
+GS_INSTALL_HINT: Final = (
     "Ghostscript ('gs') was not found on PATH. Install it first:\n"
     "  macOS:          brew install ghostscript\n"
     "  Debian/Ubuntu:  sudo apt-get install ghostscript"
@@ -37,6 +38,7 @@ def compress_pdf(src: Path, dest: Path, preset: str, gs_path: str) -> bool:
     """
     cmd = [
         gs_path,
+        "-dSAFER",  # default since gs 9.50, explicit for older installs
         "-sDEVICE=pdfwrite",
         "-dCompatibilityLevel=1.4",
         f"-dPDFSETTINGS={preset}",
