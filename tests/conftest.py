@@ -3,12 +3,13 @@
 import os
 import shutil
 from pathlib import Path
+from typing import Final
 
 import pytest
 from pypdf import PdfWriter
 
-BASE_WIDTH = 500.0
-PAGE_HEIGHT = 700.0
+BASE_WIDTH: Final = 500.0
+PAGE_HEIGHT: Final = 700.0
 
 gs_required = pytest.mark.skipif(shutil.which("gs") is None, reason="Ghostscript not installed")
 

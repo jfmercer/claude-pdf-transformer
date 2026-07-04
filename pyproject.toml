@@ -61,9 +61,11 @@ max-args = 6 # keyword-only threshold params (max_size_mb, max_pages, …) threa
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"] # asserts are the point of tests
+"src/pdf_transformer/cli.py" = ["PLR0913"] # one flag per CLI option is inherent to Typer
 
 [tool.mypy]
 strict = true
+python_version = "3.13" # enforce the floor even when run on newer interpreters
 files = ["src", "tests"]
 mypy_path = ["src"]
 explicit_package_bases = true
@@ -76,9 +78,11 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["pdf_transformer"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 95

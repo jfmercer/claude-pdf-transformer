@@ -27,7 +27,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Lint
         run: uv run ruff check
@@ -45,6 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -62,9 +63,10 @@ jobs:
         uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run tests with coverage
         run: uv run pytest --cov=pdf_transformer --cov-report=term-missing --cov-report=xml --cov-report=html
@@ -72,11 +74,11 @@ jobs:
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html-${{ matrix.os }}
+          name: coverage-html-${{ matrix.os }}-py${{ matrix.python-version }}
           path: htmlcov/
 
       - name: Upload coverage to Codecov
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.python-version == '3.13'
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml

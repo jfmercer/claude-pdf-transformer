@@ -19,6 +19,8 @@ For each PDF, the tool:
 
 Originals are never modified. Encrypted, corrupt, and non-PDF files are logged and skipped without aborting the run, and a summary is printed at the end.
 
+Only files directly inside `INPUT_DIR` are scanned — subdirectories are ignored. Files already present in the output directory are overwritten if a run produces the same output name.
+
 ## Requirements
 
 - Python 3.13+ and [uv](https://docs.astral.sh/uv/)
@@ -67,6 +69,7 @@ Split outputs use a flat, page-ordered naming convention: `report.pdf` becomes `
 | `--max-pages` | `100` | Page limit; files at or over it are split |
 | `--dry-run` | off | Report planned actions without writing files |
 | `--verbose`, `-v` | off | Debug-level logging |
+| `--version` | — | Print the version and exit |
 
 Exit codes: `0` success (including cleanly skipped non-PDFs), `1` one or more PDFs failed to process, `2` Ghostscript not found.
 

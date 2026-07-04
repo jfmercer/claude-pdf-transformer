@@ -8,9 +8,9 @@ output directory.
 ## Commands
 
 ```sh
-uv sync                    # install deps (Python 3.13, pinned in .python-version)
+uv sync                    # install deps (Python 3.14 locally; 3.13 is the supported floor)
 uv run pytest              # tests; Ghostscript-dependent tests auto-skip if gs missing
-uv run pytest --cov=pdf_transformer   # tests with coverage (gates at 95% via pyproject fail_under)
+uv run pytest --cov=pdf_transformer   # tests with branch coverage (gates at 95% via pyproject fail_under)
 uv run ruff check          # lint (includes bandit `S`, mccabe `C90`, pylint `PLR09`)
 uv run ruff format         # format
 uv run mypy                # strict type checking (src + tests)
@@ -27,6 +27,8 @@ Ghostscript (`gs`) is a required system dependency for compression
 
 - **`cli.py`** — Typer app (single command). Validates args, checks `gs` is on PATH
   (exit 2 if missing), configures logging (`--verbose` → DEBUG), maps failures to exit 1.
+  `--version` reads the package version via `importlib.metadata` (single-sourced from
+  pyproject.toml; there is no `__version__` attribute).
 - **`inspector.py`** — `inspect_pdf()` returns `PdfInfo` (path, pages, size) or raises
   `EncryptedPdfError` / `CorruptPdfError` (both subclass `PdfInspectionError`).
 - **`splitter.py`** — pure range math (`balanced_ranges`, `ranges_for_page_limit`) plus
@@ -62,11 +64,16 @@ never re-encoded.
 - Note: Ghostscript *repairs* mildly damaged PDFs — corrupt-input tests must use files
   with no `%PDF` header at all.
 - Ruff: line length 100, rules `E,W,F,I,UP,B,SIM,PTH,S,C90,PLR09` (max-complexity 10,
-  max-args 6). Logging via stdlib `logging` (module-level `logger`), lazy `%s` formatting.
-- Mypy runs in strict mode over `src` and `tests`; annotate everything, including test
-  functions and fixtures.
+  max-args 6; `cli.py` is exempt from `PLR0913`). Logging via stdlib `logging`
+  (module-level `logger`), lazy `%s` formatting.
+- Mypy runs in strict mode over `src` and `tests` with `python_version = "3.13"` (the
+  supported floor); annotate everything, including test functions and fixtures. Ruff's
+  `target-version` stays `py313` for the same reason.
+- Pytest runs with `filterwarnings = ["error"]` — new deprecation warnings fail the
+  suite; add targeted ignores rather than reverting to blanket warnings.
 - CI (`.github/workflows/ci.yml`) runs parallel jobs: `lint` (ruff/mypy), `test`
-  (ubuntu + macos matrix; coverage HTML uploaded as an artifact, XML to Codecov), and
+  (ubuntu + macos × Python 3.13/3.14 matrix; coverage HTML uploaded as an artifact,
+  XML to Codecov from the linux/3.13 cell; `uv sync --locked` fails on a stale lockfile), and
   `audit` (pip-audit for dependency CVEs, zizmor for workflow audits), plus actionlint
   and gitleaks (secrets); `codeql.yml` runs CodeQL SAST. Superseded runs are cancelled
   via a `concurrency` group; push triggers only on `master` (PRs cover branches).

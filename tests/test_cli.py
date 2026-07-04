@@ -1,4 +1,5 @@
 import logging
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,12 @@ from pdf_transformer.cli import app
 from tests.conftest import make_blank_pdf, make_corrupt_pdf
 
 runner = CliRunner()
+
+
+def test_version_flag_prints_version_and_exits_zero() -> None:
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert version("claude-pdf-transformer") in result.output
 
 
 def test_happy_path_exit_zero(input_dir: Path, output_dir: Path) -> None:

@@ -7,6 +7,7 @@ import pytest
 from pypdf import PdfReader, PdfWriter
 
 from pdf_transformer import compressor, pipeline
+from pdf_transformer.inspector import inspect_pdf
 from tests.conftest import (
     gs_required,
     make_blank_pdf,
@@ -181,6 +182,36 @@ def test_mixed_directory_bad_files_skipped(input_dir: Path, output_dir: Path) ->
     names = sorted(p.name for p in output_dir.iterdir())
     assert names == ["long_part1.pdf", "long_part2.pdf", "long_part3.pdf", "ok.pdf"]
     assert (output_dir / "ok.pdf").read_bytes() == ok.read_bytes()
+
+
+def test_uppercase_pdf_extension_is_processed(input_dir: Path, output_dir: Path) -> None:
+    make_blank_pdf(input_dir / "SHOUTY.PDF", pages=3)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=30, max_pages=100)
+    assert summary.skipped_non_pdf == []
+    assert len(summary.copied_unchanged) == 1
+    assert (output_dir / "SHOUTY.PDF").exists()
+
+
+def test_subdirectories_in_input_dir_are_ignored(input_dir: Path, output_dir: Path) -> None:
+    make_blank_pdf(input_dir / "ok.pdf", pages=3)
+    nested = input_dir / "nested.pdf"  # a directory, despite the name
+    nested.mkdir()
+    make_blank_pdf(nested / "inner.pdf", pages=3)
+    summary = pipeline.process_directory(input_dir, output_dir, max_size_mb=30, max_pages=100)
+    assert len(summary.results) == 1
+    assert summary.skipped_non_pdf == []
+    assert [p.name for p in output_dir.iterdir()] == ["ok.pdf"]
+
+
+def test_write_outputs_never_moves_the_original(input_dir: Path, output_dir: Path) -> None:
+    """Even if a piece is the untouched original (TOCTOU race), it must be copied, not moved."""
+    src = make_blank_pdf(input_dir / "ok.pdf", pages=3)
+    output_dir.mkdir()
+    info = inspect_pdf(src)
+    result = pipeline.FileResult(source=src)
+    pipeline._write_outputs([src], info, output_dir, result)
+    assert src.exists()
+    assert (output_dir / "ok.pdf").read_bytes() == src.read_bytes()
 
 
 def test_dry_run_writes_nothing(input_dir: Path, output_dir: Path) -> None:

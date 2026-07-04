@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 
-PageRange = tuple[int, int]
+type PageRange = tuple[int, int]
 """Half-open, zero-based ``(start, end)`` page range."""
 
 
