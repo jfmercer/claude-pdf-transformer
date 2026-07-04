@@ -10,7 +10,7 @@ output directory.
 ```sh
 uv sync                    # install deps (Python 3.13, pinned in .python-version)
 uv run pytest              # tests; Ghostscript-dependent tests auto-skip if gs missing
-uv run pytest --cov=pdf_transformer   # tests with coverage (CI gates at 95%)
+uv run pytest --cov=pdf_transformer   # tests with coverage (gates at 95% via pyproject fail_under)
 uv run ruff check          # lint (includes bandit `S`, mccabe `C90`, pylint `PLR09`)
 uv run ruff format         # format
 uv run mypy                # strict type checking (src + tests)
@@ -65,7 +65,10 @@ never re-encoded.
   max-args 6). Logging via stdlib `logging` (module-level `logger`), lazy `%s` formatting.
 - Mypy runs in strict mode over `src` and `tests`; annotate everything, including test
   functions and fixtures.
-- CI (`.github/workflows/ci.yml`) also runs pip-audit (dependency CVEs), zizmor +
-  actionlint (workflow audits), and gitleaks (secrets); `codeql.yml` runs CodeQL SAST.
+- CI (`.github/workflows/ci.yml`) runs parallel jobs: `lint` (ruff/mypy), `test`
+  (ubuntu + macos matrix; coverage HTML uploaded as an artifact, XML to Codecov), and
+  `audit` (pip-audit for dependency CVEs, zizmor for workflow audits), plus actionlint
+  and gitleaks (secrets); `codeql.yml` runs CodeQL SAST. Superseded runs are cancelled
+  via a `concurrency` group; push triggers only on `master` (PRs cover branches).
   Actions are pinned to version tags (`.github/zizmor.yml` relaxes zizmor's hash-pin
   policy to ref-pin) — Dependabot keeps them and uv.lock updated.

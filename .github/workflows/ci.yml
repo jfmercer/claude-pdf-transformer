@@ -2,21 +2,24 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  quality:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - name: Install Ghostscript
-        run: sudo apt-get update && sudo apt-get install -y ghostscript
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.2.0
@@ -35,8 +38,62 @@ jobs:
       - name: Type check
         run: uv run mypy
 
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Ghostscript (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ghostscript
+
+      - name: Install Ghostscript (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ghostscript
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
       - name: Run tests with coverage
-        run: uv run pytest --cov=pdf_transformer --cov-report=term-missing --cov-fail-under=95
+        run: uv run pytest --cov=pdf_transformer --cov-report=term-missing --cov-report=xml --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-${{ matrix.os }}
+          path: htmlcov/
+
+      - name: Upload coverage to Codecov
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
 
       - name: Audit dependencies for known vulnerabilities
         run: |
@@ -50,6 +107,7 @@ jobs:
 
   actionlint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -60,6 +118,7 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
