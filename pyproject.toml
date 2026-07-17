@@ -20,7 +20,7 @@ pdf-transformer = "pdf_transformer.cli:app"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.14",
+    "mypy>=2.3.0",
     "pytest>=8.3",
     "pytest-cov>=6",
     "reportlab>=4.2",
